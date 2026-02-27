@@ -24,7 +24,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "kortex-cli",
-	Short: "Launch and manage AI agents with custom configurations",
+	Short: "Launch and manage AI agent workspaces with custom configurations",
 }
 
 func Execute() {
