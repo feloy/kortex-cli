@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: help build test test-coverage lint fmt vet clean install check-fmt check-vet check-lint ci-checks all
+.PHONY: help build test test-coverage fmt vet clean install check-fmt check-vet ci-checks all
 
 # Binary name
 BINARY_NAME=kortex-cli
@@ -48,15 +48,6 @@ test-coverage: ## Run tests with coverage report
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-lint: ## Run golangci-lint
-	@echo "Running golangci-lint..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-		exit 1; \
-	fi
-
 fmt: ## Format code with gofmt
 	@echo "Formatting code..."
 	@gofmt -w $(GOFILES)
@@ -79,15 +70,6 @@ check-fmt: ## Check if code is formatted (for CI)
 check-vet: ## Run go vet and fail on issues (for CI)
 	@echo "Running go vet..."
 	@$(GO) vet ./... || (echo "go vet found issues. Please fix them."; exit 1)
-
-check-lint: ## Run golangci-lint and fail on issues (for CI)
-	@echo "Running golangci-lint..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./... || (echo "golangci-lint found issues. Please fix them."; exit 1); \
-	else \
-		echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-		exit 1; \
-	fi
 
 ci-checks: check-fmt check-vet test ## Run all CI checks
 	@echo "All CI checks passed!"
