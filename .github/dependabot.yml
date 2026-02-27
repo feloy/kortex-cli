@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Monitor Go module dependencies
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
