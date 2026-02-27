@@ -8,9 +8,11 @@ kortex-cli is a command-line interface for launching and managing AI agents (Cla
 
 ## Build and Test Commands
 
+All build and test commands are available through the Makefile. Run `make help` to see all available commands.
+
 ### Build
 ```bash
-go build ./cmd/kortex-cli
+make build
 ```
 
 ### Execute
@@ -27,33 +29,46 @@ After building, the `kortex-cli` binary will be created in the current directory
 ### Run Tests
 ```bash
 # Run all tests
-go test ./...
+make test
 
+# Run tests with coverage report
+make test-coverage
+```
+
+For more granular testing (specific packages or tests), use Go directly:
+```bash
 # Run tests in a specific package
 go test ./pkg/cmd
 
 # Run a specific test
 go test -run TestName ./pkg/cmd
-
-# Check code coverage
-go test -cover ./...
 ```
 
 ### Format Code
-All Go code should be formatted using `go fmt`:
-
 ```bash
 # Format all Go files in the project
-go fmt ./...
+make fmt
 
-# Format a specific package
-go fmt ./pkg/cmd
-
-# Format a specific file
-go fmt ./pkg/cmd/root.go
+# Check if code is formatted (without modifying files)
+make check-fmt
 ```
 
-Code should be formatted before committing. The `go fmt` tool ensures consistent style across the codebase by automatically fixing indentation, spacing, and other formatting issues.
+Code should be formatted before committing. Run `make fmt` to ensure consistent style across the codebase.
+
+### Additional Commands
+```bash
+# Run go vet
+make vet
+
+# Run all CI checks (format check, vet, tests)
+make ci-checks
+
+# Clean build artifacts
+make clean
+
+# Install binary to GOPATH/bin
+make install
+```
 
 ## Architecture
 
