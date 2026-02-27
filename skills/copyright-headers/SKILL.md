@@ -2,7 +2,6 @@
 name: copyright-headers
 description: Add or update Apache License 2.0 copyright headers to Go source files, configuration files (YAML, TOML), shell scripts, and Makefiles
 argument-hint: "[files to examine]"
-allowed-tools: yes
 ---
 
 # Copyright Headers
