@@ -15,5 +15,5 @@
 go.work
 
 # Build artifacts
-kortex-cli
+/kortex-cli
 dist/
