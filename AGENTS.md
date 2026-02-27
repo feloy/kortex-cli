@@ -39,6 +39,22 @@ go test -run TestName ./pkg/cmd
 go test -cover ./...
 ```
 
+### Format Code
+All Go code should be formatted using `go fmt`:
+
+```bash
+# Format all Go files in the project
+go fmt ./...
+
+# Format a specific package
+go fmt ./pkg/cmd
+
+# Format a specific file
+go fmt ./pkg/cmd/root.go
+```
+
+Code should be formatted before committing. The `go fmt` tool ensures consistent style across the codebase by automatically fixing indentation, spacing, and other formatting issues.
+
 ## Architecture
 
 ### Command Structure (Cobra-based)
@@ -74,7 +90,7 @@ All source files must include Apache License 2.0 copyright headers with Red Hat 
 ## Dependencies
 
 - Cobra (github.com/spf13/cobra): CLI framework
-- Go 1.25.7
+- Go 1.25+
 
 ## Testing
 
