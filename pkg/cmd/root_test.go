@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"testing"
 )
 
@@ -36,17 +35,13 @@ func TestRootCmd_Initialization(t *testing.T) {
 }
 
 func TestExecute_WithHelp(t *testing.T) {
-	// Save original os.Args and restore after test
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-
-	// Set os.Args to call help
-	os.Args = []string{"kortex-cli", "--help"}
+	t.Parallel()
 
 	// Redirect output to avoid cluttering test output
 	rootCmd := NewRootCmd()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"--help"})
 
 	// Call Execute() and verify it succeeds
 	if err := rootCmd.Execute(); err != nil {
@@ -55,17 +50,13 @@ func TestExecute_WithHelp(t *testing.T) {
 }
 
 func TestExecute_NoArgs(t *testing.T) {
-	// Save original os.Args and restore after test
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-
-	// Set os.Args with no subcommand
-	os.Args = []string{"kortex-cli"}
+	t.Parallel()
 
 	// Redirect output to avoid cluttering test output
 	rootCmd := NewRootCmd()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{})
 
 	// Call Execute() and verify it succeeds
 	if err := rootCmd.Execute(); err != nil {

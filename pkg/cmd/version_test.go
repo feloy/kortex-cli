@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"testing"
 )
 
@@ -40,17 +39,13 @@ func TestRootCmd_HasVersionCommand(t *testing.T) {
 }
 
 func TestExecute_WithVersion(t *testing.T) {
-	// Save original os.Args and restore after test
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-
-	// Set os.Args to call version subcommand
-	os.Args = []string{"kortex-cli", "version"}
+	t.Parallel()
 
 	// Redirect output to avoid cluttering test output
 	rootCmd := NewRootCmd()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"version"})
 
 	// Call Execute() and verify it succeeds
 	if err := rootCmd.Execute(); err != nil {
