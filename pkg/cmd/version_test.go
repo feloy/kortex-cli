@@ -52,6 +52,8 @@ func TestExecute_WithVersion(t *testing.T) {
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 
-	// Call Execute() - test passes if it doesn't panic
-	_ = rootCmd.Execute()
+	// Call Execute() and verify it succeeds
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() failed: %v", err)
+	}
 }

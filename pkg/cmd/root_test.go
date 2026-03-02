@@ -48,8 +48,10 @@ func TestExecute_WithHelp(t *testing.T) {
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 
-	// Call Execute() - test passes if it doesn't panic
-	_ = rootCmd.Execute()
+	// Call Execute() and verify it succeeds
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() failed: %v", err)
+	}
 }
 
 func TestExecute_NoArgs(t *testing.T) {
@@ -65,6 +67,8 @@ func TestExecute_NoArgs(t *testing.T) {
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 
-	// Call Execute() - test passes if it doesn't panic
-	_ = rootCmd.Execute()
+	// Call Execute() and verify it succeeds
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() failed: %v", err)
+	}
 }
