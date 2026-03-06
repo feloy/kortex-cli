@@ -26,8 +26,9 @@ func TestNewInstance(t *testing.T) {
 	t.Run("creates instance with valid paths", func(t *testing.T) {
 		t.Parallel()
 
-		sourceDir := "/tmp/test-source"
-		configDir := "/tmp/test-config"
+		tmpDir := t.TempDir()
+		sourceDir := filepath.Join(tmpDir, "test-source")
+		configDir := filepath.Join(tmpDir, "test-config")
 
 		inst, err := NewInstance(sourceDir, configDir)
 		if err != nil {
@@ -80,7 +81,8 @@ func TestNewInstance(t *testing.T) {
 	t.Run("returns error for empty source dir", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewInstance("", "/tmp/config")
+		tmpDir := t.TempDir()
+		_, err := NewInstance("", filepath.Join(tmpDir, "config"))
 		if err != ErrInvalidPath {
 			t.Errorf("NewInstance() error = %v, want %v", err, ErrInvalidPath)
 		}
@@ -89,7 +91,8 @@ func TestNewInstance(t *testing.T) {
 	t.Run("returns error for empty config dir", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewInstance("/tmp/source", "")
+		tmpDir := t.TempDir()
+		_, err := NewInstance(filepath.Join(tmpDir, "source"), "")
 		if err != ErrInvalidPath {
 			t.Errorf("NewInstance() error = %v, want %v", err, ErrInvalidPath)
 		}
