@@ -639,11 +639,15 @@ func TestManager_Reconcile(t *testing.T) {
 			if data.ID == "" {
 				return nil, errors.New("instance ID cannot be empty")
 			}
+			if data.Name == "" {
+				return nil, errors.New("instance name cannot be empty")
+			}
 			if data.Paths.Source == "" || data.Paths.Configuration == "" {
 				return nil, ErrInvalidPath
 			}
 			return &fakeInstance{
 				id:         data.ID,
+				name:       data.Name,
 				sourceDir:  data.Paths.Source,
 				configDir:  data.Paths.Configuration,
 				accessible: false, // Always inaccessible for this test
@@ -679,11 +683,15 @@ func TestManager_Reconcile(t *testing.T) {
 			if data.ID == "" {
 				return nil, errors.New("instance ID cannot be empty")
 			}
+			if data.Name == "" {
+				return nil, errors.New("instance name cannot be empty")
+			}
 			if data.Paths.Source == "" || data.Paths.Configuration == "" {
 				return nil, ErrInvalidPath
 			}
 			return &fakeInstance{
 				id:         data.ID,
+				name:       data.Name,
 				sourceDir:  data.Paths.Source,
 				configDir:  data.Paths.Configuration,
 				accessible: false, // Always inaccessible for this test
@@ -719,11 +727,15 @@ func TestManager_Reconcile(t *testing.T) {
 			if data.ID == "" {
 				return nil, errors.New("instance ID cannot be empty")
 			}
+			if data.Name == "" {
+				return nil, errors.New("instance name cannot be empty")
+			}
 			if data.Paths.Source == "" || data.Paths.Configuration == "" {
 				return nil, ErrInvalidPath
 			}
 			return &fakeInstance{
 				id:         data.ID,
+				name:       data.Name,
 				sourceDir:  data.Paths.Source,
 				configDir:  data.Paths.Configuration,
 				accessible: false, // Always inaccessible for this test
