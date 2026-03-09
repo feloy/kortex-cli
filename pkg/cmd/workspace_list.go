@@ -21,6 +21,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	api "github.com/kortex-hub/kortex-cli-api/cli/go"
 	"github.com/kortex-hub/kortex-cli/pkg/instances"
@@ -41,6 +42,12 @@ func (w *workspaceListCmd) preRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to read --storage flag: %w", err)
 	}
 
+	// Convert to absolute path
+	absStorageDir, err := filepath.Abs(storageDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve storage directory path: %w", err)
+	}
+
 	// Get output format flag
 	output, err := cmd.Flags().GetString("output")
 	if err != nil {
@@ -54,7 +61,7 @@ func (w *workspaceListCmd) preRun(cmd *cobra.Command, args []string) error {
 	w.output = output
 
 	// Create manager
-	manager, err := instances.NewManager(storageDir)
+	manager, err := instances.NewManager(absStorageDir)
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}

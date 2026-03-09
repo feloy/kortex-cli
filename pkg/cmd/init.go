@@ -45,8 +45,14 @@ func (i *initCmd) preRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to read --storage flag: %w", err)
 	}
 
+	// Convert to absolute path
+	absStorageDir, err := filepath.Abs(storageDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve storage directory path: %w", err)
+	}
+
 	// Create manager
-	manager, err := instances.NewManager(storageDir)
+	manager, err := instances.NewManager(absStorageDir)
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
