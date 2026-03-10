@@ -132,7 +132,16 @@ Using the pre-fetched context above:
 
 4. **Suggest commit message**: Based on the project's commit style and the changes, suggest a commit message following the conventional commit format.
 
-5. **Co-Authored-By**: If the project's commit history shows usage of `Co-Authored-By`, include this trailer with the current model information:
+5. **Co-Authored-By**: If the project's commit history shows usage of `Co-Authored-By`, include this trailer with the current agent information:
+   - **If agent metadata is available**: Use the agent name and noreply email from the runtime metadata (e.g., available through agent context or environment variables)
+   - **If agent metadata is unavailable**: Prompt the user to confirm or enter the co-author information
+
+   Format:
+   ```text
+   Co-Authored-By: <agent name> <agent noreply email>
+   ```
+
+   Example with populated values:
    ```text
    Co-Authored-By: Claude Code (Claude Sonnet 4.5) <noreply@anthropic.com>
    ```
@@ -159,12 +168,14 @@ Using the pre-fetched context above:
    git commit --signoff -m "<subject>" -m "<body>"
 
    # Or using heredoc for complex messages (including Co-Authored-By if applicable)
+   # NOTE: Replace <agent name> and <agent noreply email> with values from runtime
+   # agent metadata or prompt the user if metadata is unavailable
    git commit --signoff -m "$(cat <<'EOF'
    <type>(<scope>): <description>
 
    <body>
 
-   Co-Authored-By: Claude Code (Claude Sonnet 4.5) <noreply@anthropic.com>
+   Co-Authored-By: <agent name> <agent noreply email>
    EOF
    )"
    ```
