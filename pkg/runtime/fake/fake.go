@@ -72,16 +72,16 @@ func (f *fakeRuntime) Create(ctx context.Context, params runtime.CreateParams) (
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	// Generate sequential ID
-	id := fmt.Sprintf("fake-%03d", f.nextID)
-	f.nextID++
-
 	// Check if instance already exists with same name
 	for _, inst := range f.instances {
 		if inst.name == params.Name {
 			return runtime.RuntimeInfo{}, fmt.Errorf("instance with name %s already exists", params.Name)
 		}
 	}
+
+	// Generate sequential ID
+	id := fmt.Sprintf("fake-%03d", f.nextID)
+	f.nextID++
 
 	// Create instance state
 	state := &instanceState{

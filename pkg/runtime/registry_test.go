@@ -144,8 +144,8 @@ func TestRegistry_List(t *testing.T) {
 
 	// Check both types are present (order not guaranteed)
 	typeMap := make(map[string]bool)
-	for _, t := range types {
-		typeMap[t] = true
+	for _, typ := range types {
+		typeMap[typ] = true
 	}
 
 	if !typeMap["runtime-1"] || !typeMap["runtime-2"] {
