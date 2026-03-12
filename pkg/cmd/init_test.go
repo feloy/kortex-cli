@@ -390,8 +390,13 @@ func TestInitCmd_PreRun(t *testing.T) {
 	t.Run("outputs JSON error when manager creation fails with json output", func(t *testing.T) {
 		t.Parallel()
 
-		// Use an invalid storage path to cause manager creation to fail
-		invalidStorage := "/this/path/does/not/exist/and/should/fail"
+		tempDir := t.TempDir()
+		// Create a file and try to use it as a parent directory - will fail cross-platform
+		notADir := filepath.Join(tempDir, "file")
+		if err := os.WriteFile(notADir, []byte("test"), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		invalidStorage := filepath.Join(notADir, "subdir")
 
 		c := &initCmd{
 			output: "json",
