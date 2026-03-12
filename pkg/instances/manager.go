@@ -253,7 +253,18 @@ func (m *manager) Start(ctx context.Context, id string) error {
 	}
 
 	instances[index] = updatedInstance
-	return m.saveInstances(instances)
+
+	// Save instances with rollback on failure
+	if err := m.saveInstances(instances); err != nil {
+		// Rollback: try to stop the runtime instance to restore original state
+		stopErr := rt.Stop(ctx, runtimeData.InstanceID)
+		if stopErr != nil {
+			return fmt.Errorf("failed to save instance state and rollback runtime: save error: %w, stop error: %v", err, stopErr)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // Stop stops a runtime instance by ID.
@@ -321,7 +332,18 @@ func (m *manager) Stop(ctx context.Context, id string) error {
 	}
 
 	instances[index] = updatedInstance
-	return m.saveInstances(instances)
+
+	// Save instances with rollback on failure
+	if err := m.saveInstances(instances); err != nil {
+		// Rollback: try to start the runtime instance to restore original state
+		_, startErr := rt.Start(ctx, runtimeData.InstanceID)
+		if startErr != nil {
+			return fmt.Errorf("failed to save instance state and rollback runtime: save error: %w, start error: %v", err, startErr)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // List returns all registered instances
