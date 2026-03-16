@@ -141,7 +141,7 @@ import (
     "strings"
     "testing"
 
-    "github.com/kortex-labs/kortex-cli/pkg/cmd/testutil"
+    "github.com/kortex-hub/kortex-cli/pkg/cmd/testutil"
 )
 
 func Test<Command>Cmd_PreRun(t *testing.T) {
