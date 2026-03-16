@@ -207,9 +207,7 @@ func TestFakeRuntime_UnknownInstanceID(t *testing.T) {
 	}
 
 	// Try to remove non-existent instance
-	// Note: Remove is idempotent for fake runtime (returns nil for non-existent instances)
-	// because the fake runtime is not persistent and doesn't share state across instances.
-	// This differs from real runtimes but is appropriate for testing.
+	// Note: Remove is idempotent for fake runtime (returns nil for non-existent instances).
 	err = rt.Remove(ctx, "unknown-id")
 	if err != nil {
 		t.Errorf("Expected nil (idempotent remove), got %v", err)
@@ -377,4 +375,342 @@ func TestFakeRuntime_ParallelOperations(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestFakeRuntime_Persistence(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	storageDir := t.TempDir()
+
+	// Create and initialize first runtime
+	rt1 := New()
+	storageAware1, ok := rt1.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware1.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Create an instance
+	params := runtime.CreateParams{
+		Name:       "persistent-test",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	info1, err := rt1.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	instanceID := info1.ID
+
+	// Start the instance
+	_, err = rt1.Start(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Create and initialize second runtime with same storage
+	rt2 := New()
+	storageAware2, ok := rt2.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err = storageAware2.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Second initialize failed: %v", err)
+	}
+
+	// Verify instance was loaded from disk
+	info2, err := rt2.Info(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Info failed on second runtime: %v", err)
+	}
+
+	if info2.ID != instanceID {
+		t.Errorf("Expected ID %s, got %s", instanceID, info2.ID)
+	}
+	if info2.State != "running" {
+		t.Errorf("Expected state 'running', got '%s'", info2.State)
+	}
+	if info2.Info["source"] != "/source" {
+		t.Errorf("Expected source '/source', got '%s'", info2.Info["source"])
+	}
+}
+
+func TestFakeRuntime_PersistenceStateChanges(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	storageDir := t.TempDir()
+
+	// Create and initialize runtime
+	rt := New()
+	storageAware, ok := rt.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Create an instance
+	params := runtime.CreateParams{
+		Name:       "state-test",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	info, err := rt.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	instanceID := info.ID
+
+	// Start the instance
+	_, err = rt.Start(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Create new runtime and verify running state persisted
+	rt2 := New()
+	storageAware2, ok := rt2.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err = storageAware2.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Second initialize failed: %v", err)
+	}
+
+	info, err = rt2.Info(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Info failed: %v", err)
+	}
+	if info.State != "running" {
+		t.Errorf("Expected state 'running', got '%s'", info.State)
+	}
+
+	// Stop the instance
+	err = rt2.Stop(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+
+	// Create third runtime and verify stopped state persisted
+	rt3 := New()
+	storageAware3, ok := rt3.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err = storageAware3.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Third initialize failed: %v", err)
+	}
+
+	info, err = rt3.Info(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Info failed: %v", err)
+	}
+	if info.State != "stopped" {
+		t.Errorf("Expected state 'stopped', got '%s'", info.State)
+	}
+}
+
+func TestFakeRuntime_PersistenceRemoval(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	storageDir := t.TempDir()
+
+	// Create and initialize runtime
+	rt := New()
+	storageAware, ok := rt.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Create an instance
+	params := runtime.CreateParams{
+		Name:       "removal-test",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	info, err := rt.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	instanceID := info.ID
+
+	// Remove the instance
+	err = rt.Remove(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("Remove failed: %v", err)
+	}
+
+	// Create new runtime and verify instance is gone
+	rt2 := New()
+	storageAware2, ok := rt2.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err = storageAware2.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Second initialize failed: %v", err)
+	}
+
+	_, err = rt2.Info(ctx, instanceID)
+	if !errors.Is(err, runtime.ErrInstanceNotFound) {
+		t.Errorf("Expected ErrInstanceNotFound, got %v", err)
+	}
+}
+
+func TestFakeRuntime_PersistenceSequentialIDs(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	storageDir := t.TempDir()
+
+	// Create and initialize first runtime
+	rt1 := New()
+	storageAware1, ok := rt1.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware1.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Create first instance
+	params := runtime.CreateParams{
+		Name:       "instance-1",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	info1, err := rt1.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if info1.ID != "fake-001" {
+		t.Errorf("Expected ID 'fake-001', got '%s'", info1.ID)
+	}
+
+	// Create and initialize second runtime with same storage
+	rt2 := New()
+	storageAware2, ok := rt2.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err = storageAware2.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Second initialize failed: %v", err)
+	}
+
+	// Create second instance - should get next sequential ID
+	params.Name = "instance-2"
+	info2, err := rt2.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if info2.ID != "fake-002" {
+		t.Errorf("Expected ID 'fake-002', got '%s'", info2.ID)
+	}
+}
+
+func TestFakeRuntime_InitializeEmptyDirectory(t *testing.T) {
+	t.Parallel()
+
+	storageDir := t.TempDir()
+
+	rt := New()
+	storageAware, ok := rt.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware.Initialize(storageDir)
+	if err != nil {
+		t.Fatalf("Initialize with empty directory failed: %v", err)
+	}
+
+	// Verify we can create instances
+	ctx := context.Background()
+	params := runtime.CreateParams{
+		Name:       "test",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	_, err = rt.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+}
+
+func TestFakeRuntime_InitializeEmptyStorageDir(t *testing.T) {
+	t.Parallel()
+
+	rt := New()
+	storageAware, ok := rt.(runtime.StorageAware)
+	if !ok {
+		t.Fatal("Expected runtime to implement StorageAware")
+	}
+
+	err := storageAware.Initialize("")
+	if err == nil {
+		t.Fatal("Expected error when initializing with empty storage directory")
+	}
+}
+
+func TestFakeRuntime_WithoutInitialization(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create runtime without initializing storage
+	rt := New()
+
+	params := runtime.CreateParams{
+		Name:       "test",
+		SourcePath: "/source",
+		ConfigPath: "/config",
+	}
+
+	// Should still work in memory-only mode
+	info, err := rt.Create(ctx, params)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	// Verify it works
+	_, err = rt.Info(ctx, info.ID)
+	if err != nil {
+		t.Fatalf("Info failed: %v", err)
+	}
 }

@@ -17,39 +17,140 @@ package fake
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kortex-hub/kortex-cli/pkg/runtime"
 )
 
-// fakeRuntime is an in-memory fake runtime for testing.
+const (
+	// storageFileName is the name of the file used to persist fake runtime instances
+	storageFileName = "instances.json"
+)
+
+// fakeRuntime is a persistent fake runtime for testing.
+// It stores instance state on disk when initialized with a storage directory via the StorageAware interface.
+// If no storage is provided, it falls back to in-memory mode for backward compatibility.
 type fakeRuntime struct {
-	mu        sync.RWMutex
-	instances map[string]*instanceState
-	nextID    int
+	mu          sync.RWMutex
+	instances   map[string]*instanceState
+	nextID      int
+	storageDir  string // Empty if not initialized with storage
+	storageFile string // Empty if not initialized with storage
 }
 
 // instanceState tracks the state of a fake runtime instance.
 type instanceState struct {
-	id     string
-	name   string
-	state  string
-	info   map[string]string
-	source string
-	config string
+	ID     string            `json:"id"`
+	Name   string            `json:"name"`
+	State  string            `json:"state"`
+	Info   map[string]string `json:"info"`
+	Source string            `json:"source"`
+	Config string            `json:"config"`
+}
+
+// persistedData is the structure stored on disk
+type persistedData struct {
+	NextID    int                       `json:"next_id"`
+	Instances map[string]*instanceState `json:"instances"`
 }
 
 // Ensure fakeRuntime implements runtime.Runtime at compile time.
 var _ runtime.Runtime = (*fakeRuntime)(nil)
 
+// Ensure fakeRuntime implements runtime.StorageAware at compile time.
+var _ runtime.StorageAware = (*fakeRuntime)(nil)
+
 // New creates a new fake runtime instance.
+// The runtime will operate in memory-only mode until Initialize is called.
 func New() runtime.Runtime {
 	return &fakeRuntime{
 		instances: make(map[string]*instanceState),
 		nextID:    1,
 	}
+}
+
+// Initialize implements runtime.StorageAware.
+// It sets up the storage directory and loads any existing instances from disk.
+func (f *fakeRuntime) Initialize(storageDir string) error {
+	if storageDir == "" {
+		return fmt.Errorf("storage directory cannot be empty")
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.storageDir = storageDir
+	f.storageFile = filepath.Join(storageDir, storageFileName)
+
+	// Load existing instances from disk if the file exists
+	return f.loadFromDisk()
+}
+
+// loadFromDisk loads instances from the storage file.
+// Must be called with f.mu locked.
+func (f *fakeRuntime) loadFromDisk() error {
+	// If no storage is configured, skip loading
+	if f.storageFile == "" {
+		return nil
+	}
+
+	// If file doesn't exist, nothing to load
+	if _, err := os.Stat(f.storageFile); os.IsNotExist(err) {
+		return nil
+	}
+
+	data, err := os.ReadFile(f.storageFile)
+	if err != nil {
+		return fmt.Errorf("failed to read storage file: %w", err)
+	}
+
+	// Empty file case
+	if len(data) == 0 {
+		return nil
+	}
+
+	var persisted persistedData
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		return fmt.Errorf("failed to unmarshal storage data: %w", err)
+	}
+
+	f.nextID = persisted.NextID
+	f.instances = persisted.Instances
+	if f.instances == nil {
+		f.instances = make(map[string]*instanceState)
+	}
+
+	return nil
+}
+
+// saveToDisk saves instances to the storage file.
+// Must be called with f.mu locked.
+func (f *fakeRuntime) saveToDisk() error {
+	// If no storage is configured, skip saving
+	if f.storageFile == "" {
+		return nil
+	}
+
+	persisted := persistedData{
+		NextID:    f.nextID,
+		Instances: f.instances,
+	}
+
+	data, err := json.MarshalIndent(persisted, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal storage data: %w", err)
+	}
+
+	if err := os.WriteFile(f.storageFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write storage file: %w", err)
+	}
+
+	return nil
 }
 
 // Type returns the runtime type identifier.
@@ -74,7 +175,7 @@ func (f *fakeRuntime) Create(ctx context.Context, params runtime.CreateParams) (
 
 	// Check if instance already exists with same name
 	for _, inst := range f.instances {
-		if inst.name == params.Name {
+		if inst.Name == params.Name {
 			return runtime.RuntimeInfo{}, fmt.Errorf("instance with name %s already exists", params.Name)
 		}
 	}
@@ -85,12 +186,12 @@ func (f *fakeRuntime) Create(ctx context.Context, params runtime.CreateParams) (
 
 	// Create instance state
 	state := &instanceState{
-		id:     id,
-		name:   params.Name,
-		state:  "created",
-		source: params.SourcePath,
-		config: params.ConfigPath,
-		info: map[string]string{
+		ID:     id,
+		Name:   params.Name,
+		State:  "created",
+		Source: params.SourcePath,
+		Config: params.ConfigPath,
+		Info: map[string]string{
 			"created_at": time.Now().Format(time.RFC3339),
 			"source":     params.SourcePath,
 			"config":     params.ConfigPath,
@@ -99,10 +200,15 @@ func (f *fakeRuntime) Create(ctx context.Context, params runtime.CreateParams) (
 
 	f.instances[id] = state
 
+	// Persist to disk if storage is configured
+	if err := f.saveToDisk(); err != nil {
+		return runtime.RuntimeInfo{}, fmt.Errorf("failed to persist instance: %w", err)
+	}
+
 	return runtime.RuntimeInfo{
 		ID:    id,
-		State: state.state,
-		Info:  copyMap(state.info),
+		State: state.State,
+		Info:  copyMap(state.Info),
 	}, nil
 }
 
@@ -116,17 +222,22 @@ func (f *fakeRuntime) Start(ctx context.Context, id string) (runtime.RuntimeInfo
 		return runtime.RuntimeInfo{}, fmt.Errorf("%w: %s", runtime.ErrInstanceNotFound, id)
 	}
 
-	if inst.state == "running" {
+	if inst.State == "running" {
 		return runtime.RuntimeInfo{}, fmt.Errorf("instance %s is already running", id)
 	}
 
-	inst.state = "running"
-	inst.info["started_at"] = time.Now().Format(time.RFC3339)
+	inst.State = "running"
+	inst.Info["started_at"] = time.Now().Format(time.RFC3339)
+
+	// Persist to disk if storage is configured
+	if err := f.saveToDisk(); err != nil {
+		return runtime.RuntimeInfo{}, fmt.Errorf("failed to persist instance state: %w", err)
+	}
 
 	return runtime.RuntimeInfo{
-		ID:    inst.id,
-		State: inst.state,
-		Info:  copyMap(inst.info),
+		ID:    inst.ID,
+		State: inst.State,
+		Info:  copyMap(inst.Info),
 	}, nil
 }
 
@@ -140,12 +251,17 @@ func (f *fakeRuntime) Stop(ctx context.Context, id string) error {
 		return fmt.Errorf("%w: %s", runtime.ErrInstanceNotFound, id)
 	}
 
-	if inst.state != "running" {
+	if inst.State != "running" {
 		return fmt.Errorf("instance %s is not running", id)
 	}
 
-	inst.state = "stopped"
-	inst.info["stopped_at"] = time.Now().Format(time.RFC3339)
+	inst.State = "stopped"
+	inst.Info["stopped_at"] = time.Now().Format(time.RFC3339)
+
+	// Persist to disk if storage is configured
+	if err := f.saveToDisk(); err != nil {
+		return fmt.Errorf("failed to persist instance state: %w", err)
+	}
 
 	return nil
 }
@@ -157,21 +273,22 @@ func (f *fakeRuntime) Remove(ctx context.Context, id string) error {
 
 	inst, exists := f.instances[id]
 	if !exists {
-		// TODO: The fake runtime is not persistent - each New() creates a separate
-		// in-memory instance that doesn't share state. This causes issues in tests
-		// where one manager creates instances and another manager (with a new fake
-		// runtime) tries to remove them. Consider implementing persistent storage
-		// for the fake runtime (e.g., file-based or shared in-memory registry) to
-		// better simulate real runtimes (Docker/Podman) which maintain state externally.
-		// For now, treat missing instances as already removed (idempotent operation).
+		// Treat missing instances as already removed (idempotent operation).
+		// This is safe because the instance isn't in memory or on disk.
 		return nil
 	}
 
-	if inst.state == "running" {
+	if inst.State == "running" {
 		return fmt.Errorf("instance %s is still running, stop it first", id)
 	}
 
 	delete(f.instances, id)
+
+	// Persist to disk if storage is configured
+	if err := f.saveToDisk(); err != nil {
+		return fmt.Errorf("failed to persist instance removal: %w", err)
+	}
+
 	return nil
 }
 
@@ -186,9 +303,9 @@ func (f *fakeRuntime) Info(ctx context.Context, id string) (runtime.RuntimeInfo,
 	}
 
 	return runtime.RuntimeInfo{
-		ID:    inst.id,
-		State: inst.state,
-		Info:  copyMap(inst.info),
+		ID:    inst.ID,
+		State: inst.State,
+		Info:  copyMap(inst.Info),
 	}, nil
 }
 
