@@ -30,6 +30,7 @@ import (
     "path/filepath"
 
     "github.com/spf13/cobra"
+    "github.com/kortex-hub/kortex-cli/pkg/instances"
     // Add other imports as needed
 )
 
@@ -141,6 +142,7 @@ import (
     "strings"
     "testing"
 
+    "github.com/spf13/cobra"
     "github.com/kortex-hub/kortex-cli/pkg/cmd/testutil"
 )
 
