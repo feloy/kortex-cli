@@ -16,6 +16,7 @@ package podman
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,9 @@ func TestValidateDependencyPath(t *testing.T) {
 func TestValidateCreateParams(t *testing.T) {
 	t.Parallel()
 
+	// Use a real temp directory for cross-platform testing
+	tempSourcePath := t.TempDir()
+
 	tests := []struct {
 		name        string
 		params      runtime.CreateParams
@@ -102,7 +106,7 @@ func TestValidateCreateParams(t *testing.T) {
 			name: "valid parameters",
 			params: runtime.CreateParams{
 				Name:       "test-workspace",
-				SourcePath: "/path/to/source",
+				SourcePath: tempSourcePath,
 			},
 			expectError: false,
 		},
@@ -110,7 +114,7 @@ func TestValidateCreateParams(t *testing.T) {
 			name: "missing name",
 			params: runtime.CreateParams{
 				Name:       "",
-				SourcePath: "/path/to/source",
+				SourcePath: tempSourcePath,
 			},
 			expectError: true,
 			errorType:   runtime.ErrInvalidParams,
@@ -134,7 +138,7 @@ func TestValidateCreateParams(t *testing.T) {
 			name: "valid dependency path",
 			params: runtime.CreateParams{
 				Name:       "test-workspace",
-				SourcePath: "/path/to/source",
+				SourcePath: tempSourcePath,
 				WorkspaceConfig: &workspace.WorkspaceConfiguration{
 					Mounts: &workspace.Mounts{
 						Dependencies: &[]string{"../main"},
@@ -147,7 +151,7 @@ func TestValidateCreateParams(t *testing.T) {
 			name: "invalid dependency path - too many levels up",
 			params: runtime.CreateParams{
 				Name:       "test-workspace",
-				SourcePath: "/path/to/source",
+				SourcePath: tempSourcePath,
 				WorkspaceConfig: &workspace.WorkspaceConfiguration{
 					Mounts: &workspace.Mounts{
 						Dependencies: &[]string{"../../main"},
@@ -269,9 +273,11 @@ func TestBuildContainerArgs(t *testing.T) {
 		t.Parallel()
 
 		p := &podmanRuntime{}
+		// Use t.TempDir() for cross-platform path handling
+		sourcePath := t.TempDir()
 		params := runtime.CreateParams{
 			Name:       "test-workspace",
-			SourcePath: "/path/to/source",
+			SourcePath: sourcePath,
 		}
 		imageName := "kortex-cli-test-workspace"
 
@@ -284,7 +290,7 @@ func TestBuildContainerArgs(t *testing.T) {
 		expectedArgs := []string{
 			"create",
 			"--name", "test-workspace",
-			"-v", "/path/to/source:/workspace/sources:Z",
+			"-v", fmt.Sprintf("%s:/workspace/sources:Z", sourcePath),
 			"-w", "/workspace/sources",
 			"kortex-cli-test-workspace",
 			"sleep", "infinity",
@@ -316,9 +322,11 @@ func TestBuildContainerArgs(t *testing.T) {
 			{Name: "EMPTY", Value: &emptyValue},
 		}
 
+		// Use t.TempDir() for cross-platform path handling
+		sourcePath := t.TempDir()
 		params := runtime.CreateParams{
 			Name:       "test-workspace",
-			SourcePath: "/path/to/source",
+			SourcePath: sourcePath,
 			WorkspaceConfig: &workspace.WorkspaceConfiguration{
 				Environment: &envVars,
 			},
@@ -355,9 +363,21 @@ func TestBuildContainerArgs(t *testing.T) {
 			Dependencies: &deps,
 		}
 
+		// Create a real temp directory structure for cross-platform testing
+		tempDir := t.TempDir()
+		projectsDir := filepath.Join(tempDir, "projects")
+		currentDir := filepath.Join(projectsDir, "current")
+		mainDir := filepath.Join(projectsDir, "main")
+		sharedDir := filepath.Join(projectsDir, "shared")
+
+		// Create the directories
+		os.MkdirAll(currentDir, 0755)
+		os.MkdirAll(mainDir, 0755)
+		os.MkdirAll(sharedDir, 0755)
+
 		params := runtime.CreateParams{
 			Name:       "test-workspace",
-			SourcePath: "/path/to/projects/current",
+			SourcePath: currentDir,
 			WorkspaceConfig: &workspace.WorkspaceConfiguration{
 				Mounts: &mounts,
 			},
@@ -379,11 +399,16 @@ func TestBuildContainerArgs(t *testing.T) {
 		if !strings.Contains(argsStr, "-v") {
 			t.Error("Expected volume mounts")
 		}
-		if !strings.Contains(argsStr, "/path/to/projects/main:/workspace/main:Z") {
-			t.Errorf("Expected main dependency mount, got: %s", argsStr)
+
+		// Build expected mount strings with cross-platform paths
+		expectedMainMount := fmt.Sprintf("%s:/workspace/main:Z", mainDir)
+		expectedSharedMount := fmt.Sprintf("%s:/workspace/shared:Z", sharedDir)
+
+		if !strings.Contains(argsStr, expectedMainMount) {
+			t.Errorf("Expected main dependency mount %q, got: %s", expectedMainMount, argsStr)
 		}
-		if !strings.Contains(argsStr, "/path/to/projects/shared:/workspace/shared:Z") {
-			t.Errorf("Expected shared dependency mount, got: %s", argsStr)
+		if !strings.Contains(argsStr, expectedSharedMount) {
+			t.Errorf("Expected shared dependency mount %q, got: %s", expectedSharedMount, argsStr)
 		}
 	})
 
@@ -447,9 +472,19 @@ func TestBuildContainerArgs(t *testing.T) {
 			Configs:      &configs,
 		}
 
+		// Create a real temp directory structure for cross-platform testing
+		tempDir := t.TempDir()
+		projectsDir := filepath.Join(tempDir, "projects")
+		currentDir := filepath.Join(projectsDir, "current")
+		mainDir := filepath.Join(projectsDir, "main")
+
+		// Create the directories
+		os.MkdirAll(currentDir, 0755)
+		os.MkdirAll(mainDir, 0755)
+
 		params := runtime.CreateParams{
 			Name:       "test-workspace",
-			SourcePath: "/path/to/projects/current",
+			SourcePath: currentDir,
 			WorkspaceConfig: &workspace.WorkspaceConfiguration{
 				Environment: &envVars,
 				Mounts:      &mounts,
@@ -475,11 +510,16 @@ func TestBuildContainerArgs(t *testing.T) {
 		if !strings.Contains(argsStr, "-e DEBUG=true") {
 			t.Error("Expected environment variable")
 		}
-		if !strings.Contains(argsStr, "/path/to/projects/current:/workspace/sources:Z") {
-			t.Error("Expected source mount")
+
+		// Build expected mount strings with cross-platform paths
+		expectedSourceMount := fmt.Sprintf("%s:/workspace/sources:Z", currentDir)
+		expectedMainMount := fmt.Sprintf("%s:/workspace/main:Z", mainDir)
+
+		if !strings.Contains(argsStr, expectedSourceMount) {
+			t.Errorf("Expected source mount %q", expectedSourceMount)
 		}
-		if !strings.Contains(argsStr, "/path/to/projects/main:/workspace/main:Z") {
-			t.Error("Expected dependency mount")
+		if !strings.Contains(argsStr, expectedMainMount) {
+			t.Errorf("Expected dependency mount %q", expectedMainMount)
 		}
 		if !strings.Contains(argsStr, ":/home/claude/.claude:Z") {
 			t.Error("Expected config mount")

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -35,7 +36,9 @@ func validateDependencyPath(path string) error {
 	// Start at depth 2 (representing /workspace/sources)
 	currentDepth := 2
 
-	parts := strings.SplitSeq(path, string(filepath.Separator))
+	// Dependency paths in configuration always use forward slashes (cross-platform)
+	// Split by "/" regardless of OS
+	parts := strings.SplitSeq(path, "/")
 	for part := range parts {
 		if part == ".." {
 			currentDepth--
@@ -166,9 +169,13 @@ func (p *podmanRuntime) buildContainerArgs(params runtime.CreateParams, imageNam
 	if params.WorkspaceConfig != nil && params.WorkspaceConfig.Mounts != nil {
 		if params.WorkspaceConfig.Mounts.Dependencies != nil {
 			for _, dep := range *params.WorkspaceConfig.Mounts.Dependencies {
-				depAbsPath := filepath.Join(params.SourcePath, dep)
+				// Convert dependency path from forward slashes (cross-platform config format)
+				// to OS-specific separators for the host path
+				depOSPath := filepath.FromSlash(dep)
+				depAbsPath := filepath.Join(params.SourcePath, depOSPath)
 				// Mount at /workspace/sources/<dep-path> to preserve relative path structure
-				depMountPoint := filepath.Join("/workspace/sources", dep)
+				// Use path.Join (not filepath.Join) for container paths to ensure forward slashes
+				depMountPoint := path.Join("/workspace/sources", dep)
 				args = append(args, "-v", fmt.Sprintf("%s:%s:Z", depAbsPath, depMountPoint))
 			}
 		}
@@ -180,9 +187,13 @@ func (p *podmanRuntime) buildContainerArgs(params runtime.CreateParams, imageNam
 				return nil, fmt.Errorf("failed to get home directory: %w", err)
 			}
 			for _, conf := range *params.WorkspaceConfig.Mounts.Configs {
-				confAbsPath := filepath.Join(homeDir, conf)
+				// Convert config path from forward slashes to OS-specific separators
+				confOSPath := filepath.FromSlash(conf)
+				confAbsPath := filepath.Join(homeDir, confOSPath)
 				// HOME in container is /home/claude for the image, this may be different for other images
-				args = append(args, "-v", fmt.Sprintf("%s:/home/claude/%s:Z", confAbsPath, conf))
+				// Use path.Join for container paths to ensure forward slashes
+				confMountPoint := path.Join("/home/claude", conf)
+				args = append(args, "-v", fmt.Sprintf("%s:%s:Z", confAbsPath, confMountPoint))
 			}
 		}
 	}
