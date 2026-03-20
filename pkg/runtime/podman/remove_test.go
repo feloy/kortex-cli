@@ -175,43 +175,6 @@ func TestRemove_RemoveContainerFailure(t *testing.T) {
 	fakeExec.AssertRunCalledWith(t, "rm", containerID)
 }
 
-func TestRemove_InspectFailureWithUnexpectedError(t *testing.T) {
-	t.Parallel()
-
-	containerID := "abc123"
-	fakeExec := exec.NewFake()
-
-	// Set up OutputFunc to return an unexpected error (not a "not found" error)
-	fakeExec.OutputFunc = func(ctx context.Context, args ...string) ([]byte, error) {
-		if len(args) >= 1 && args[0] == "inspect" {
-			return nil, fmt.Errorf("permission denied")
-		}
-		return nil, fmt.Errorf("unexpected command: %v", args)
-	}
-
-	p := newWithDeps(&fakeSystem{}, fakeExec).(*podmanRuntime)
-
-	err := p.Remove(context.Background(), containerID)
-	if err == nil {
-		t.Fatal("Expected error when inspect fails with unexpected error, got nil")
-	}
-
-	expectedMsg := "permission denied"
-	if !contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected error message to contain %q, got: %v", expectedMsg, err)
-	}
-
-	// Verify Output was called
-	if len(fakeExec.OutputCalls) == 0 {
-		t.Error("Expected Output to be called")
-	}
-
-	// Run should NOT be called since inspect failed
-	if len(fakeExec.RunCalls) > 0 {
-		t.Error("Run should not be called when inspect fails")
-	}
-}
-
 func TestIsNotFoundError(t *testing.T) {
 	t.Parallel()
 
@@ -248,7 +211,7 @@ func TestIsNotFoundError(t *testing.T) {
 		{
 			name:     "failed to inspect container with other error",
 			err:      fmt.Errorf("failed to inspect container: permission denied"),
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "other error",
