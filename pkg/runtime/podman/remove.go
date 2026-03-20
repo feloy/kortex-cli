@@ -66,7 +66,5 @@ func isNotFoundError(err error) bool {
 	return strings.Contains(errMsg, "no such container") ||
 		strings.Contains(errMsg, "no such object") ||
 		strings.Contains(errMsg, "error getting container") ||
-		(strings.Contains(errMsg, "failed to inspect container") &&
-			(strings.Contains(errMsg, "no such") ||
-				strings.Contains(errMsg, "not found")))
+		strings.Contains(errMsg, "failed to inspect container")
 }
