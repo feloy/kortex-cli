@@ -79,7 +79,7 @@ func (c *config) LoadImage() (*ImageConfig, error) {
 	// Parse the JSON
 	var cfg ImageConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConfig, err)
 	}
 
 	// Validate the configuration
@@ -115,7 +115,7 @@ func (c *config) LoadAgent(agentName string) (*AgentConfig, error) {
 	// Parse the JSON
 	var cfg AgentConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConfig, err)
 	}
 
 	// Validate the configuration

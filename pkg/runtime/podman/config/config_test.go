@@ -292,6 +292,10 @@ func TestLoadImage(t *testing.T) {
 		if err == nil {
 			t.Fatal("Expected error for invalid JSON")
 		}
+
+		if !errors.Is(err, ErrInvalidConfig) {
+			t.Errorf("Expected ErrInvalidConfig, got: %v", err)
+		}
 	})
 
 	t.Run("returns ErrInvalidConfig for validation failure", func(t *testing.T) {
