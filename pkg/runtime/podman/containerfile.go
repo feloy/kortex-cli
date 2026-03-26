@@ -26,10 +26,10 @@ const (
 	BaseImageRegistry = "registry.fedoraproject.org/fedora"
 
 	// ContainerUser is the hardcoded container user
-	ContainerUser = "claude"
+	ContainerUser = "agent"
 
 	// ContainerGroup is the hardcoded container group
-	ContainerGroup = "claude"
+	ContainerGroup = "agent"
 )
 
 // generateSudoers generates the sudoers file content from a list of allowed binaries.
@@ -83,8 +83,8 @@ func generateContainerfile(imageConfig *config.ImageConfig, agentConfig *config.
 	lines = append(lines, "ARG GID=1000")
 	lines = append(lines, `RUN GROUPNAME=$(grep $GID /etc/group | cut -d: -f1); [ -n "$GROUPNAME" ] && groupdel $GROUPNAME || true`)
 	lines = append(lines, fmt.Sprintf(`RUN groupadd -g "${GID}" %s && useradd -u "${UID}" -g "${GID}" -m %s`, ContainerGroup, ContainerUser))
-	lines = append(lines, "COPY sudoers /etc/sudoers.d/claude")
-	lines = append(lines, "RUN chmod 0440 /etc/sudoers.d/claude")
+	lines = append(lines, fmt.Sprintf("COPY sudoers /etc/sudoers.d/%s", ContainerUser))
+	lines = append(lines, fmt.Sprintf("RUN chmod 0440 /etc/sudoers.d/%s", ContainerUser))
 	lines = append(lines, fmt.Sprintf("USER %s:%s", ContainerUser, ContainerGroup))
 	lines = append(lines, "")
 

@@ -58,7 +58,7 @@ func defaultClaudeConfig() *AgentConfig {
 		Packages: []string{},
 		RunCommands: []string{
 			"curl -fsSL --proto-redir '-all,https' --tlsv1.3 https://claude.ai/install.sh | bash",
-			"mkdir -p /home/claude/.config",
+			"mkdir -p /home/agent/.config",
 		},
 		TerminalCommand: []string{"claude"},
 	}

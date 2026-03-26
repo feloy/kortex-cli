@@ -58,6 +58,9 @@ type CreateParams struct {
 
 	// WorkspaceConfig is the workspace configuration (optional, can be nil if no configuration exists).
 	WorkspaceConfig *workspace.WorkspaceConfiguration
+
+	// Agent is the agent name for loading agent-specific configuration (optional, can be empty).
+	Agent string
 }
 
 // RuntimeInfo contains information about a runtime instance.
@@ -99,6 +102,8 @@ type Terminal interface {
 	// Parameters:
 	//   - ctx: Context for cancellation and timeout
 	//   - instanceID: The runtime instance identifier
-	//   - command: The command to execute (e.g., ["bash"], ["claude-code", "--debug"])
-	Terminal(ctx context.Context, instanceID string, command []string) error
+	//   - agent: The agent name for loading agent-specific configuration
+	//   - command: The command to execute (e.g., ["bash"], ["claude-code", "--debug"]).
+	//              If empty, the runtime will use the agent's configured terminal command.
+	Terminal(ctx context.Context, instanceID string, agent string, command []string) error
 }

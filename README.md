@@ -59,7 +59,7 @@ Exit code: `0` (success, but no workspaces registered)
 **Step 2: Register a new workspace**
 
 ```bash
-$ kortex-cli init /path/to/project --runtime fake -o json
+$ kortex-cli init /path/to/project --runtime fake --agent claude -o json
 ```
 
 ```json
@@ -73,13 +73,14 @@ Exit code: `0` (success)
 **Step 3: Register with verbose output to get full details**
 
 ```bash
-$ kortex-cli init /path/to/another-project --runtime fake -o json -v
+$ kortex-cli init /path/to/another-project --runtime fake --agent claude -o json -v
 ```
 
 ```json
 {
   "id": "f6e5d4c3b2a1098765432109876543210987654321098765432109876543210a",
   "name": "another-project",
+  "agent": "claude",
   "paths": {
     "source": "/absolute/path/to/another-project",
     "configuration": "/absolute/path/to/another-project/.kortex"
@@ -101,6 +102,7 @@ $ kortex-cli workspace list -o json
     {
       "id": "2c5f16046476be368fcada501ac6cdc6bbd34ea80eb9ceb635530c0af64681ea",
       "name": "project",
+      "agent": "claude",
       "paths": {
         "source": "/absolute/path/to/project",
         "configuration": "/absolute/path/to/project/.kortex"
@@ -109,6 +111,7 @@ $ kortex-cli workspace list -o json
     {
       "id": "f6e5d4c3b2a1098765432109876543210987654321098765432109876543210a",
       "name": "another-project",
+      "agent": "claude",
       "paths": {
         "source": "/absolute/path/to/another-project",
         "configuration": "/absolute/path/to/another-project/.kortex"
@@ -232,7 +235,7 @@ Exit code: `1` (error)
 #!/bin/bash
 
 # Register a workspace
-output=$(kortex-cli init /path/to/project --runtime fake -o json)
+output=$(kortex-cli init /path/to/project --runtime fake --agent claude -o json)
 exit_code=$?
 
 if [ $exit_code -eq 0 ]; then
@@ -287,6 +290,46 @@ kortex-cli init /path/to/another-project --runtime podman
 - If neither the flag nor the environment variable is set, the `init` command will fail with an error
 - Supported runtime types depend on the available runtime implementations
 - Setting this environment variable is useful for automation scripts or when you consistently use the same runtime
+
+### `KORTEX_CLI_DEFAULT_AGENT`
+
+Sets the default agent to use when registering a workspace with the `init` command.
+
+**Usage:**
+
+```bash
+export KORTEX_CLI_DEFAULT_AGENT=claude
+kortex-cli init /path/to/project --runtime fake
+```
+
+**Priority:**
+
+The agent is determined in the following order (highest to lowest priority):
+
+1. `--agent` flag (if specified)
+2. `KORTEX_CLI_DEFAULT_AGENT` environment variable (if set)
+3. Error if neither is set (agent is required)
+
+**Example:**
+
+```bash
+# Set the default agent for the current shell session
+export KORTEX_CLI_DEFAULT_AGENT=claude
+
+# Register a workspace using the environment variable
+kortex-cli init /path/to/project --runtime fake
+
+# Override the environment variable with the flag
+kortex-cli init /path/to/another-project --runtime fake --agent goose
+```
+
+**Notes:**
+
+- The agent parameter is mandatory when registering workspaces
+- If neither the flag nor the environment variable is set, the `init` command will fail with an error
+- Supported agent types depend on the available agent configurations in the runtime
+- Agent names must contain only alphanumeric characters or underscores (e.g., `claude`, `goose`, `my_agent`)
+- Setting this environment variable is useful for automation scripts or when you consistently use the same agent
 
 ### `KORTEX_CLI_STORAGE`
 
@@ -355,15 +398,15 @@ The runtime includes a comprehensive development toolchain:
 
 #### User and Permissions
 
-The container runs as a non-root user named `claude` with the following configuration:
+The container runs as a non-root user named `agent` with the following configuration:
 
-- **User:** `claude`
+- **User:** `agent`
 - **UID/GID:** Matches the host user's UID and GID for seamless file permissions
-- **Home Directory:** `/home/claude`
+- **Home Directory:** `/home/agent`
 
 **Sudo Permissions:**
 
-The `claude` user has limited sudo access with no password required (`NOPASSWD`) for:
+The `agent` user has limited sudo access with no password required (`NOPASSWD`) for:
 
 - **Package Management:**
   - `/usr/bin/dnf` - Install, update, and manage packages
@@ -393,7 +436,7 @@ The container's working directory is set to `/workspace/sources`, which is where
 
 ```bash
 # Register a workspace with the Podman runtime
-kortex-cli init /path/to/project --runtime podman
+kortex-cli init /path/to/project --runtime podman --agent claude
 ```
 
 **User Experience:**
@@ -487,7 +530,7 @@ Controls the container's base image, packages, and sudo permissions.
   - Can include package groups with `@` prefix (e.g., `"@development-tools"`)
   - Empty array is valid if no packages needed
 
-- `sudo` (optional) - Binaries the `claude` user can run with sudo
+- `sudo` (optional) - Binaries the `agent` user can run with sudo
   - Must be absolute paths (e.g., `"/usr/bin/dnf"`)
   - Creates a single `ALLOWED` command alias in sudoers
   - Empty array disables all sudo access
@@ -508,7 +551,7 @@ Controls agent-specific packages and installation steps.
   "packages": [],
   "run_commands": [
     "curl -fsSL --proto-redir '-all,https' --tlsv1.3 https://claude.ai/install.sh | bash",
-    "mkdir /home/claude/.config"
+    "mkdir /home/agent/.config"
   ],
   "terminal_command": [
     "claude"
@@ -563,7 +606,7 @@ Configuration changes take effect when you **register a new workspace with `init
 - Each workspace's image is built once using the configuration at registration time
 - To rebuild a workspace with new config, remove and re-register it
 - Validation errors in config files will cause workspace registration to fail with a descriptive message
-- The generated Containerfile is automatically copied to `/home/claude/Containerfile` inside the container for reference
+- The generated Containerfile is automatically copied to `/home/agent/Containerfile` inside the container for reference
 
 ## Workspace Configuration
 
@@ -948,10 +991,7 @@ kortex-cli init --runtime fake --agent claude
 kortex-cli init --runtime fake --project my-custom-project --agent goose
 ```
 
-**Register without agent (uses workspace + project configs only):**
-```bash
-kortex-cli init --runtime fake
-```
+**Note:** The `--agent` flag is required (or set `KORTEX_CLI_DEFAULT_AGENT` environment variable) when registering a workspace.
 
 ### Merging Behavior
 
@@ -1041,6 +1081,7 @@ kortex-cli init [sources-directory] [flags]
 #### Flags
 
 - `--runtime, -r <type>` - Runtime to use for the workspace (required if `KORTEX_CLI_DEFAULT_RUNTIME` is not set)
+- `--agent, -a <name>` - Agent to use for the workspace (required if `KORTEX_CLI_DEFAULT_AGENT` is not set)
 - `--workspace-configuration <path>` - Directory for workspace configuration files (default: `<sources-directory>/.kortex`)
 - `--name, -n <name>` - Human-readable name for the workspace (default: generated from sources directory)
 - `--project, -p <identifier>` - Custom project identifier to override auto-detection (default: auto-detected from git repository or source directory)
@@ -1052,46 +1093,47 @@ kortex-cli init [sources-directory] [flags]
 
 **Register the current directory:**
 ```bash
-kortex-cli init --runtime fake
+kortex-cli init --runtime fake --agent claude
 ```
 Output: `a1b2c3d4e5f6...` (workspace ID)
 
 **Register a specific directory:**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake
+kortex-cli init /path/to/myproject --runtime fake --agent claude
 ```
 
 **Register with a custom name:**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake --name "my-awesome-project"
+kortex-cli init /path/to/myproject --runtime fake --agent claude --name "my-awesome-project"
 ```
 
 **Register with a custom project identifier:**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake --project "my project"
+kortex-cli init /path/to/myproject --runtime fake --agent claude --project "my project"
 ```
 
 **Register with custom configuration location:**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake --workspace-configuration /path/to/config
+kortex-cli init /path/to/myproject --runtime fake --agent claude --workspace-configuration /path/to/config
 ```
 
 **View detailed output:**
 ```bash
-kortex-cli init --runtime fake --verbose
+kortex-cli init --runtime fake --agent claude --verbose
 ```
 Output:
 ```text
 Registered workspace:
   ID: a1b2c3d4e5f6...
   Name: myproject
+  Agent: claude
   Sources directory: /absolute/path/to/myproject
   Configuration directory: /absolute/path/to/myproject/.kortex
 ```
 
 **JSON output (default - ID only):**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake --output json
+kortex-cli init /path/to/myproject --runtime fake --agent claude --output json
 ```
 Output:
 ```json
@@ -1102,13 +1144,14 @@ Output:
 
 **JSON output with verbose flag (full workspace details):**
 ```bash
-kortex-cli init /path/to/myproject --runtime fake --output json --verbose
+kortex-cli init /path/to/myproject --runtime fake --agent claude --output json --verbose
 ```
 Output:
 ```json
 {
   "id": "a1b2c3d4e5f6...",
   "name": "myproject",
+  "agent": "claude",
   "paths": {
     "source": "/absolute/path/to/myproject",
     "configuration": "/absolute/path/to/myproject/.kortex"
@@ -1118,7 +1161,7 @@ Output:
 
 **JSON output with short flags:**
 ```bash
-kortex-cli init -r fake -o json -v
+kortex-cli init -r fake -a claude -o json -v
 ```
 
 #### Workspace Naming
@@ -1215,6 +1258,7 @@ kortex-cli init /tmp/workspace --runtime fake
 #### Notes
 
 - **Runtime is required**: You must specify a runtime using either the `--runtime` flag or the `KORTEX_CLI_DEFAULT_RUNTIME` environment variable
+- **Agent is required**: You must specify an agent using either the `--agent` flag or the `KORTEX_CLI_DEFAULT_AGENT` environment variable
 - **Project auto-detection**: The project identifier is automatically detected from git repository information or source directory path. Use `--project` flag to override with a custom identifier
 - All directory paths are converted to absolute paths for consistency
 - The workspace ID is a unique identifier generated automatically
@@ -1222,7 +1266,7 @@ kortex-cli init /tmp/workspace --runtime fake
 - The default configuration directory (`.kortex`) is created inside the sources directory unless specified otherwise
 - JSON output format is useful for scripting and automation
 - Without `--verbose`, JSON output returns only the workspace ID
-- With `--verbose`, JSON output includes full workspace details (ID, name, paths)
+- With `--verbose`, JSON output includes full workspace details (ID, name, agent, paths)
 - **JSON error handling**: When `--output json` is used, errors are written to stdout (not stderr) in JSON format, and the CLI exits with code 1. Always check the exit code to determine success/failure
 
 ### `workspace list` - List All Registered Workspaces
@@ -1251,11 +1295,13 @@ Output:
 ```text
 ID: a1b2c3d4e5f6...
   Name: myproject
+  Agent: claude
   Sources: /absolute/path/to/myproject
   Configuration: /absolute/path/to/myproject/.kortex
 
 ID: f6e5d4c3b2a1...
   Name: another-project
+  Agent: goose
   Sources: /absolute/path/to/another-project
   Configuration: /absolute/path/to/another-project/.kortex
 ```
@@ -1276,6 +1322,7 @@ Output:
     {
       "id": "a1b2c3d4e5f6...",
       "name": "myproject",
+      "agent": "claude",
       "paths": {
         "source": "/absolute/path/to/myproject",
         "configuration": "/absolute/path/to/myproject/.kortex"
@@ -1284,6 +1331,7 @@ Output:
     {
       "id": "f6e5d4c3b2a1...",
       "name": "another-project",
+      "agent": "goose",
       "paths": {
         "source": "/absolute/path/to/another-project",
         "configuration": "/absolute/path/to/another-project/.kortex"
@@ -1576,7 +1624,9 @@ kortex-cli terminal a1b2c3d4e5f6...
 
 - The workspace must be in a **running state** before you can connect to it. Use `workspace start` to start a workspace first
 - The workspace ID is required and can be obtained using the `workspace list` or `list` command
-- By default, the command launches the agent configured in the runtime (typically Claude Code)
+- By default (when no command is provided), the runtime uses the `terminal_command` from the agent's configuration file
+  - For example, if the workspace was created with `--agent claude`, it will use the command defined in `claude.json` (typically `["claude"]`)
+  - This ensures you connect directly to the configured agent
 - You can override the default by providing a custom command (e.g., `bash`, `python`, or any executable available in the container)
 - Use the `--` separator when your command includes flags to prevent kortex-cli from trying to parse them
 - The terminal session is fully interactive with stdin/stdout/stderr connected to your terminal
