@@ -221,6 +221,42 @@ if err := runtimesetup.RegisterAll(manager); err != nil {
 
 This automatically registers all runtimes from `pkg/runtimesetup/register.go` that report as available (e.g., only registers Podman if `podman` CLI is installed).
 
+**Optional Runtime Interfaces:**
+
+Some runtimes may implement additional optional interfaces to provide extended functionality:
+
+**Terminal Interface** (`runtime.Terminal`):
+
+Runtimes implementing this interface enable interactive terminal sessions for connecting to running instances. This is used by the `terminal` command.
+
+```go
+type Terminal interface {
+    // Terminal starts an interactive terminal session inside a running instance.
+    // The command is executed with stdin/stdout/stderr connected directly to the user's terminal.
+    Terminal(ctx context.Context, instanceID string, command []string) error
+}
+```
+
+Example implementation (Podman runtime):
+```go
+func (p *podmanRuntime) Terminal(ctx context.Context, instanceID string, command []string) error {
+    if instanceID == "" {
+        return fmt.Errorf("%w: instance ID is required", runtime.ErrInvalidParams)
+    }
+    if len(command) == 0 {
+        return fmt.Errorf("%w: command is required", runtime.ErrInvalidParams)
+    }
+
+    // Build podman exec -it <container> <command...>
+    args := []string{"exec", "-it", instanceID}
+    args = append(args, command...)
+
+    return p.executor.RunInteractive(ctx, args...)
+}
+```
+
+The Terminal interface follows the same pattern as `StorageAware` - it's optional, and runtimes that don't support interactive sessions simply don't implement it. The instances manager checks for Terminal support at runtime using type assertion.
+
 ### StepLogger System
 
 The StepLogger system provides user-facing progress feedback during runtime operations. It displays operational steps with spinners and completion messages in text mode, improving the user experience for long-running operations.
@@ -954,6 +990,9 @@ kortex-cli example --flag value`,
 - Examples must use the actual binary name (`kortex-cli`)
 - All commands and flags in examples must exist
 - Keep examples concise and realistic
+- Use `--` separator when passing flags to nested commands: `kortex-cli terminal ID -- bash -c 'echo hello'`
+  - The `--` tells the example validator to stop parsing flags and treat everything after as arguments
+  - This matches Cobra's behavior for passing arguments to nested commands
 
 **Validating Examples:**
 
@@ -1266,6 +1305,91 @@ func outputErrorIfJSON(cmd interface{ OutOrStdout() io.Writer }, output string, 
 
 **Reference:** See `pkg/cmd/init.go`, `pkg/cmd/workspace_remove.go`, and `pkg/cmd/workspace_list.go` for complete implementations.
 
+### Interactive Commands (No JSON Output)
+
+Some commands are inherently interactive and do not support JSON output. These commands connect stdin/stdout/stderr directly to a user's terminal.
+
+**Example: Terminal Command**
+
+The `terminal` command provides an interactive session with a running workspace instance:
+
+```go
+type workspaceTerminalCmd struct {
+    manager instances.Manager
+    id      string
+    command []string
+}
+
+func (w *workspaceTerminalCmd) preRun(cmd *cobra.Command, args []string) error {
+    w.id = args[0]
+
+    // Extract command from args[1:] if provided
+    if len(args) > 1 {
+        w.command = args[1:]
+    } else {
+        // Default command (configurable from runtime)
+        w.command = []string{"claude"}
+    }
+
+    // Standard setup: storage flag, manager, runtime registration
+    storageDir, _ := cmd.Flags().GetString("storage")
+    absStorageDir, _ := filepath.Abs(storageDir)
+
+    manager, err := instances.NewManager(absStorageDir)
+    if err != nil {
+        return fmt.Errorf("failed to create manager: %w", err)
+    }
+
+    if err := runtimesetup.RegisterAll(manager); err != nil {
+        return fmt.Errorf("failed to register runtimes: %w", err)
+    }
+
+    w.manager = manager
+    return nil
+}
+
+func (w *workspaceTerminalCmd) run(cmd *cobra.Command, args []string) error {
+    // Connect to terminal - this is a blocking interactive call
+    err := w.manager.Terminal(cmd.Context(), w.id, w.command)
+    if err != nil {
+        if errors.Is(err, instances.ErrInstanceNotFound) {
+            return fmt.Errorf("workspace not found: %s\nUse 'workspace list' to see available workspaces", w.id)
+        }
+        return err
+    }
+    return nil
+}
+```
+
+**Key differences from JSON-supporting commands:**
+- **No `--output` flag** - Interactive commands don't need this
+- **No JSON output helpers** - All output goes directly to terminal
+- **Simpler error handling** - Just return errors normally (no `outputErrorIfJSON`)
+- **Blocking execution** - The command runs until the user exits the interactive session
+- **Command arguments** - Accept commands to run inside the instance: `terminal ID bash` or `terminal ID -- bash -c 'echo hello'`
+
+**Example command registration:**
+
+```go
+func NewWorkspaceTerminalCmd() *cobra.Command {
+    c := &workspaceTerminalCmd{}
+
+    cmd := &cobra.Command{
+        Use:     "terminal ID [COMMAND...]",
+        Short:   "Connect to a running workspace with an interactive terminal",
+        Args:    cobra.MinimumNArgs(1),
+        ValidArgsFunction: completeRunningWorkspaceID,  // Only show running workspaces
+        PreRunE: c.preRun,
+        RunE:    c.run,
+    }
+
+    // No flags needed - just uses global --storage flag
+    return cmd
+}
+```
+
+**Reference:** See `pkg/cmd/workspace_terminal.go` for the complete implementation.
+
 ### Testing Pattern for Commands
 
 Commands should have two types of tests following the pattern in `pkg/cmd/init_test.go`:
@@ -1381,7 +1505,51 @@ err := manager.Delete(id)
 if err != nil {
     return fmt.Errorf("failed to delete instance: %w", err)
 }
+
+// Connect to a running instance with an interactive terminal
+// Note: Instance must be running and runtime must implement Terminal interface
+err := manager.Terminal(ctx, id, []string{"bash"})
+if err != nil {
+    return fmt.Errorf("failed to connect to terminal: %w", err)
+}
 ```
+
+**Terminal Method:**
+
+The `Terminal()` method enables interactive terminal sessions with running workspace instances:
+
+```go
+func (m *manager) Terminal(ctx context.Context, id string, command []string) error
+```
+
+**Behavior:**
+- Verifies the instance exists and is in a running state
+- Checks if the runtime implements the `runtime.Terminal` interface
+- Delegates to the runtime's Terminal implementation
+- Returns an error if the instance is not running or runtime doesn't support terminals
+
+**Example usage in a command:**
+
+```go
+func (w *workspaceTerminalCmd) run(cmd *cobra.Command, args []string) error {
+    // Start terminal session with the command extracted in preRun
+    err := w.manager.Terminal(cmd.Context(), w.id, w.command)
+    if err != nil {
+        if errors.Is(err, instances.ErrInstanceNotFound) {
+            return fmt.Errorf("workspace not found: %s\nUse 'workspace list' to see available workspaces", w.id)
+        }
+        return err
+    }
+    return nil
+}
+```
+
+**Key points:**
+- Uses a read lock (doesn't modify instance state)
+- Command is a slice of strings: `[]string{"bash"}` or `[]string{"claude-code", "--debug"}`
+- Returns `ErrInstanceNotFound` if instance doesn't exist
+- Returns an error if instance state is not "running"
+- Returns an error if the runtime doesn't implement `runtime.Terminal` interface
 
 ### Project Detection and Grouping
 

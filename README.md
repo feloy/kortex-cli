@@ -1487,6 +1487,103 @@ Output:
 - When using `--output json`, errors are also returned in JSON format for consistent parsing
 - **JSON error handling**: When `--output json` is used, errors are written to stdout (not stderr) in JSON format, and the CLI exits with code 1. Always check the exit code to determine success/failure
 
+### `workspace terminal` - Connect to a Running Workspace
+
+Connects to a running workspace with an interactive terminal session. Also available as the shorter alias `terminal`.
+
+#### Usage
+
+```bash
+kortex-cli workspace terminal ID [COMMAND...] [flags]
+kortex-cli terminal ID [COMMAND...] [flags]
+```
+
+#### Arguments
+
+- `ID` - The unique identifier of the workspace to connect to (required)
+- `COMMAND...` - Optional command to execute instead of the default agent command
+
+#### Flags
+
+- `--storage <path>` - Storage directory for kortex-cli data (default: `$HOME/.kortex-cli`)
+
+#### Examples
+
+**Connect using the default agent command:**
+```bash
+kortex-cli workspace terminal a1b2c3d4e5f6...
+```
+
+This starts an interactive session with the default agent (typically Claude Code) inside the running workspace container.
+
+**Use the short alias:**
+```bash
+kortex-cli terminal a1b2c3d4e5f6...
+```
+
+**Run a bash shell:**
+```bash
+kortex-cli terminal a1b2c3d4e5f6... bash
+```
+
+**Run a command with flags (use -- to prevent kortex-cli from parsing them):**
+```bash
+kortex-cli terminal a1b2c3d4e5f6... -- bash -c 'echo hello'
+```
+
+The `--` separator tells kortex-cli to stop parsing flags and pass everything after it directly to the container. This is useful when your command includes flags that would otherwise be interpreted by kortex-cli.
+
+**List workspaces and connect to a running one:**
+```bash
+# First, list all workspaces to find the ID
+kortex-cli list
+
+# Start a workspace if it's not running
+kortex-cli start a1b2c3d4e5f6...
+
+# Then connect with a terminal
+kortex-cli terminal a1b2c3d4e5f6...
+```
+
+#### Error Handling
+
+**Workspace not found:**
+```bash
+kortex-cli terminal invalid-id
+```
+Output:
+```text
+Error: workspace not found: invalid-id
+Use 'workspace list' to see available workspaces
+```
+
+**Workspace not running:**
+```bash
+kortex-cli terminal a1b2c3d4e5f6...
+```
+Output:
+```text
+Error: instance is not running (current state: created)
+```
+
+In this case, you need to start the workspace first:
+```bash
+kortex-cli start a1b2c3d4e5f6...
+kortex-cli terminal a1b2c3d4e5f6...
+```
+
+#### Notes
+
+- The workspace must be in a **running state** before you can connect to it. Use `workspace start` to start a workspace first
+- The workspace ID is required and can be obtained using the `workspace list` or `list` command
+- By default, the command launches the agent configured in the runtime (typically Claude Code)
+- You can override the default by providing a custom command (e.g., `bash`, `python`, or any executable available in the container)
+- Use the `--` separator when your command includes flags to prevent kortex-cli from trying to parse them
+- The terminal session is fully interactive with stdin/stdout/stderr connected to your terminal
+- The command execution happens inside the workspace's container/runtime environment
+- JSON output is **not supported** for this command as it's inherently interactive
+- Runtime support: The terminal command requires the runtime to implement the Terminal interface. The Podman runtime supports this using `podman exec -it`
+
 ### `workspace remove` - Remove a Workspace
 
 Removes a registered workspace by its ID. Also available as the shorter alias `remove`.
