@@ -19,7 +19,7 @@ name: deploy-docs
 on:
   push:
     branches:
-      - main
+      - test1
     paths:
       - 'README.md'
       - 'website/**'
